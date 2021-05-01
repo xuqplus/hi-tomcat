@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -18,7 +19,7 @@ public class SelectorTest {
         new Thread(() -> {
             try {
                 ServerSocketChannel serverSocketChannel = ServerSocketChannel.open();
-                serverSocketChannel.socket().bind(new InetSocketAddress("localhost", 8080));
+                serverSocketChannel.bind(new InetSocketAddress("localhost", 8080));
                 Selector selector = Selector.open();
                 serverSocketChannel.configureBlocking(false);
                 serverSocketChannel.register(selector, SelectionKey.OP_ACCEPT);
@@ -33,12 +34,30 @@ public class SelectorTest {
                         SelectionKey key = iterator.next();
                         if (key.isAcceptable()) {
                             log.info("1");
+                            try {
+                                SocketChannel socketChannel = serverSocketChannel.accept();
+                                socketChannel.configureBlocking(false);
+                                socketChannel.register(selector, SelectionKey.OP_READ);
+                            } catch (Exception e) {
+                                // noop
+                            }
                         }
                         if (key.isConnectable()) {
                             log.info("2");
                         }
                         if (key.isReadable()) {
                             log.info("3");
+                            SelectableChannel channel = key.channel();
+                            if (channel instanceof SocketChannel) {
+                                SocketChannel socketChannel = (SocketChannel) channel;
+                                ByteBuffer buf = ByteBuffer.allocate(2048);
+                                while (0 < socketChannel.read(buf)) {
+                                    final String s = new String(buf.array());
+                                    System.out.println(String.format("-->%s", s));
+                                    buf.flip();
+                                    buf.clear();
+                                }
+                            }
                         }
                         if (key.isWritable()) {
                             log.info("4");
